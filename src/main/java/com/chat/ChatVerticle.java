@@ -23,7 +23,7 @@ public class ChatVerticle extends AbstractVerticle {
     private HttpServer server;
 
     @Override
-    public void start() {
+    public void start(io.vertx.core.Promise<Void> startPromise) {
         repository = new ChatRepository(vertx);
         connectionManager = new ConnectionManager();
         chatService = new ChatService(repository, connectionManager);
@@ -31,13 +31,21 @@ public class ChatVerticle extends AbstractVerticle {
         connectionManager.startHeartbeat(vertx, 30_000);
 
         Router router = Router.router(vertx);
+
+        router.route().handler(io.vertx.ext.web.handler.CorsHandler.create()
+                .addOrigin("*")
+                .allowedMethod(io.vertx.core.http.HttpMethod.GET)
+                .allowedMethod(io.vertx.core.http.HttpMethod.POST)
+                .allowedMethod(io.vertx.core.http.HttpMethod.OPTIONS)
+                .allowedHeader("Content-Type")
+                .allowedHeader("Upgrade"));
+
         router.route().handler(BodyHandler.create());
 
         router.post("/api/login").handler(this::handleLogin);
         router.get("/api/users").handler(this::handleGetUsers);
         router.get("/api/messages").handler(this::handleGetMessages);
 
-        // WebSocket Routing
         router.route("/ws").handler(ctx -> {
             String username = ctx.request().getParam("username");
             if (username == null || username.isBlank()) {
@@ -55,8 +63,14 @@ public class ChatVerticle extends AbstractVerticle {
         server = vertx.createHttpServer();
         server.requestHandler(router)
                 .listen(port)
-                .onSuccess(s -> log.info("Server started on port {}", port))
-                .onFailure(err -> vertx.close());
+                .onSuccess(s -> {
+                    log.info("Server started on port {}", port);
+                    startPromise.complete();
+                })
+                .onFailure(err -> {
+                    log.error("Failed to start server on port {}", port, err);
+                    startPromise.fail(err);
+                });
     }
 
     @Override
