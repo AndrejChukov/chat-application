@@ -165,8 +165,10 @@ public class ChatVerticle extends AbstractVerticle {
         ws.textMessageHandler(raw -> handleWsMessage(ws, username, raw));
 
         ws.closeHandler(v -> {
-            connectionManager.unregister(username);
-            broadcastUserStatus(username, "user_offline");
+            boolean removed = connectionManager.unregister(username, ws);
+            if (removed && !connectionManager.isOnline(username)) {
+                broadcastUserStatus(username, "user_offline");
+            }
             log.info("WebSocket closed for user: {}", username);
         });
 

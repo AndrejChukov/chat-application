@@ -22,9 +22,12 @@ public class ConnectionManager {
         log.debug("Registered WebSocket session for user: {}", username);
     }
 
-    public void unregister(String username) {
-        sessions.remove(username);
-        log.debug("Unregistered WebSocket session for user: {}", username);
+    public boolean unregister(String username, ServerWebSocket ws) {
+        boolean removed = sessions.remove(username, ws);
+        if (removed) {
+            log.debug("Unregistered WebSocket session for user: {}", username);
+        }
+        return removed;
     }
 
     public ServerWebSocket get(String username) {
