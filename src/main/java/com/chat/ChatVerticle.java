@@ -95,16 +95,31 @@ public class ChatVerticle extends AbstractVerticle {
         String username = ctx.request().getParam("username");
         String peer = ctx.request().getParam("peer");
 
-        repository.findUserByUsername(username)
-                .compose(u1 -> repository.findUserByUsername(peer).map(u2 -> new Long[]{u1.id(), u2.id()}))
-                .compose(ids -> repository.getConversation(ids[0], ids[1]))
+        if (username == null || peer == null || username.isBlank() || peer.isBlank()) {
+            ctx.response().setStatusCode(400).end("username and peer params required");
+            return;
+        }
+
+        int limit = parseIntOrDefault(ctx.request().getParam("limit"), 50);
+        int offset = parseIntOrDefault(ctx.request().getParam("offset"), 0);
+
+        chatService.getConversation(username, peer, limit, offset)
                 .map(messages -> {
                     JsonArray array = new JsonArray();
                     messages.forEach(m -> array.add(m.toJson()));
                     return array;
                 })
                 .onSuccess(array -> ctx.response().putHeader("Content-Type", "application/json").end(array.encode()))
-                .onFailure(err -> ctx.response().setStatusCode(500).end(err.getMessage()));
+                .onFailure(err -> ctx.response().setStatusCode(404).end(err.getMessage()));
+    }
+
+    private int parseIntOrDefault(String value, int defaultValue) {
+        if (value == null || value.isBlank()) return defaultValue;
+        try {
+            return Integer.parseInt(value);
+        } catch (NumberFormatException e) {
+            return defaultValue;
+        }
     }
 
     private void handleWebSocket(ServerWebSocket ws, String username) {

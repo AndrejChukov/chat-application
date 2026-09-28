@@ -86,19 +86,23 @@ public class ChatRepository {
                 .compose(rows -> enrichMessage(mapMessageRow(rows.iterator().next())));
     }
 
-    public Future<List<Message>> getConversation(long userId, long peerId) {
+    public Future<List<Message>> getConversation(long userId, long peerId, int limit, int offset) {
         return pool.preparedQuery(
                         """
-                        SELECT m.id, m.sender_id, m.recipient_id, m.content, m.status, m.created_at,
-                               su.username AS sender_username, ru.username AS recipient_username
-                        FROM messages m
-                        JOIN users su ON su.id = m.sender_id
-                        JOIN users ru ON ru.id = m.recipient_id
-                        WHERE (m.sender_id = $1 AND m.recipient_id = $2)
-                           OR (m.sender_id = $2 AND m.recipient_id = $1)
-                        ORDER BY m.created_at ASC
+                        SELECT * FROM (
+                            SELECT m.id, m.sender_id, m.recipient_id, m.content, m.status, m.created_at,
+                                   su.username AS sender_username, ru.username AS recipient_username
+                            FROM messages m
+                            JOIN users su ON su.id = m.sender_id
+                            JOIN users ru ON ru.id = m.recipient_id
+                            WHERE (m.sender_id = $1 AND m.recipient_id = $2)
+                               OR (m.sender_id = $2 AND m.recipient_id = $1)
+                            ORDER BY m.created_at DESC
+                            LIMIT $3 OFFSET $4
+                        ) sub
+                        ORDER BY sub.created_at ASC
                         """)
-                .execute(Tuple.of(userId, peerId))
+                .execute(Tuple.of(userId, peerId, limit, offset))
                 .map(rows -> {
                     List<Message> messages = new ArrayList<>();
                     for (Row row : rows) {

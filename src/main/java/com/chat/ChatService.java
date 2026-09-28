@@ -158,4 +158,13 @@ public class ChatService {
     public void sendError(ServerWebSocket ws, String message) {
         sendEvent(ws, WsEventType.ERROR, new JsonObject().put("message", message));
     }
+
+    public Future<List<Message>> getConversation(String username, String peerUsername, int limit, int offset) {
+        int safeLimit = Math.max(1, Math.min(limit, 100));
+        int safeOffset = Math.max(0, offset);
+
+        return repository.findUserByUsername(username)
+                .compose(currentUser -> repository.findUserByUsername(peerUsername)
+                        .compose(peer -> repository.getConversation(currentUser.id(), peer.id(), safeLimit, safeOffset)));
+    }
 }
