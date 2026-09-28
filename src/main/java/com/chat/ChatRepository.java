@@ -28,9 +28,9 @@ public class ChatRepository {
         PgConnectOptions connectOptions = new PgConnectOptions()
                 .setHost(getEnv("DB_HOST", "localhost"))
                 .setPort(Integer.parseInt(getEnv("DB_PORT", "5432")))
-                .setDatabase(getEnv("DB_NAME", "chatdb"))
-                .setUser(getEnv("DB_USER", "chatuser"))
-                .setPassword(getEnv("DB_PASSWORD", "chatpass"));
+                .setDatabase(getEnv("DB_NAME", "chat_application"))
+                .setUser(getEnv("DB_USER", "postgres"))
+                .setPassword(getEnv("DB_PASSWORD", "postgres"));
 
         PoolOptions poolOptions = new PoolOptions().setMaxSize(10);
         this.pool = PgPool.pool(vertx, connectOptions, poolOptions);

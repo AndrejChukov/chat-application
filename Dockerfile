@@ -20,9 +20,9 @@ EXPOSE 8080
 
 ENV DB_HOST=postgres
 ENV DB_PORT=5432
-ENV DB_NAME=chatdb
-ENV DB_USER=chatuser
-ENV DB_PASSWORD=chatpass
+ENV DB_NAME=chat_application
+ENV DB_USER=postgres
+ENV DB_PASSWORD=postgres
 ENV HTTP_PORT=8080
 
 ENTRYPOINT ["java", "-jar", "app.jar"]

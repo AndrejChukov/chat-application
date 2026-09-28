@@ -1,0 +1,16 @@
+CREATE TABLE IF NOT EXISTS users
+(
+    id         BIGSERIAL PRIMARY KEY,
+    username   VARCHAR(64) NOT NULL UNIQUE,
+    created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
+);
+
+CREATE TABLE IF NOT EXISTS messages
+(
+    id           BIGSERIAL PRIMARY KEY,
+    sender_id    BIGINT      NOT NULL REFERENCES users (id) ON DELETE RESTRICT,
+    recipient_id BIGINT      NOT NULL REFERENCES users (id) ON DELETE RESTRICT,
+    content      TEXT        NOT NULL,
+    status       VARCHAR(16) NOT NULL     DEFAULT 'SENT',
+    created_at   TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
+);
