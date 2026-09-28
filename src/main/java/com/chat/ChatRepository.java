@@ -108,20 +108,25 @@ public class ChatRepository {
                 });
     }
 
-    public Future<Void> updateMessageStatus(long messageId, MessageStatus status) {
-        return pool.preparedQuery("UPDATE messages SET status = $1 WHERE id = $2")
-                .execute(Tuple.of(status.name(), messageId))
-                .mapEmpty();
+    public Future<Boolean> transitionMessageStatus(long messageId, MessageStatus currentExpected, MessageStatus newStatus) {
+        if (!currentExpected.canTransitionTo(newStatus)) {
+            return Future.succeededFuture(false);
+        }
+
+        return pool.preparedQuery(
+                        "UPDATE messages SET status = $1 WHERE id = $2 AND status = $3")
+                .execute(Tuple.of(newStatus.name(), messageId, currentExpected.name()))
+                .map(rows -> rows.rowCount() > 0);
     }
 
     public Future<List<Long>> markConversationRead(long recipientId, long senderId) {
         return pool.preparedQuery(
                         """
-                        UPDATE messages SET status = $1
-                        WHERE recipient_id = $2 AND sender_id = $3 AND status != $1
+                        UPDATE messages SET status = 'READ'
+                        WHERE recipient_id = $1 AND sender_id = $2 AND status IN ('SENT', 'DELIVERED')
                         RETURNING id
                         """)
-                .execute(Tuple.of(MessageStatus.READ.name(), recipientId, senderId))
+                .execute(Tuple.of(recipientId, senderId))
                 .map(rows -> {
                     List<Long> ids = new ArrayList<>();
                     for (Row row : rows) {

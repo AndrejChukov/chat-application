@@ -87,15 +87,16 @@ public class ChatService {
                         String rawEvent = WsEvent.of(WsEventType.NEW_MESSAGE.getValue(), messagePayload).toJson().encode();
 
                         return recipientWs.writeTextMessage(rawEvent)
-                                .compose(v -> repository.updateMessageStatus(message.id(), MessageStatus.DELIVERED))
-                                .onSuccess(v -> {
-                                    // ВОТ ЗДЕСЬ БЫЛА ОШИБКА (создаем JsonObject):
-                                    JsonObject statusPayload = new JsonObject()
-                                            .put("messageId", message.id())
-                                            .put("status", MessageStatus.DELIVERED.name());
+                                .compose(v -> repository.transitionMessageStatus(message.id(), MessageStatus.SENT, MessageStatus.DELIVERED))
+                                .onSuccess(updated -> {
+                                    if (Boolean.TRUE.equals(updated)) {
+                                        JsonObject statusPayload = new JsonObject()
+                                                .put("messageId", message.id())
+                                                .put("status", MessageStatus.DELIVERED.name());
 
-                                    sendEvent(senderWs, WsEventType.STATUS_UPDATE, statusPayload);
-                                    sendEvent(recipientWs, WsEventType.STATUS_UPDATE, statusPayload);
+                                        sendEvent(senderWs, WsEventType.STATUS_UPDATE, statusPayload);
+                                        sendEvent(recipientWs, WsEventType.STATUS_UPDATE, statusPayload);
+                                    }
                                 })
                                 .onFailure(err -> log.warn("Failed to write to WS for {}. Message remains SENT.", recipientUsername, err))
                                 .mapEmpty();
