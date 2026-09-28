@@ -278,23 +278,31 @@
         }
     }
 
+    let reconnectAttempts = 0;
+    let reconnectTimer = null;
+
     function connectWebSocket() {
+        if (!currentUser) return;
+
         const protocol = location.protocol === 'https:' ? 'wss:' : 'ws:';
         ws = new WebSocket(`${protocol}//${location.host}/ws?username=${encodeURIComponent(currentUser.username)}`);
 
         ws.onopen = () => {
+            reconnectAttempts = 0;
             wsDot.className = 'w-2 h-2 rounded-full bg-green-400';
             wsLabel.textContent = 'Подключено';
+            loadUsers();
         };
 
         ws.onclose = () => {
-            wsDot.className = 'w-2 h-2 rounded-full bg-red-400';
-            wsLabel.textContent = 'Отключено';
+            wsDot.className = 'w-2 h-2 rounded-full bg-yellow-400';
+            wsLabel.textContent = 'Связь потеряна. Переподключение...';
+            scheduleReconnect();
         };
 
-        ws.onerror = () => {
-            wsDot.className = 'w-2 h-2 rounded-full bg-red-400';
-            wsLabel.textContent = 'Ошибка соединения';
+        ws.onerror = (err) => {
+            console.warn('WS error:', err);
+            ws.close();
         };
 
         ws.onmessage = (event) => {
@@ -322,6 +330,18 @@
                     break;
             }
         };
+    }
+
+    function scheduleReconnect() {
+        if (!currentUser || reconnectTimer) return;
+
+        const delay = Math.min(1000 * Math.pow(2, reconnectAttempts), 10000);
+        reconnectAttempts++;
+
+        reconnectTimer = setTimeout(() => {
+            reconnectTimer = null;
+            connectWebSocket();
+        }, delay);
     }
 
     loginForm.addEventListener('submit', async (e) => {
@@ -365,6 +385,8 @@
     });
 
     logoutBtn.addEventListener('click', () => {
+        if (reconnectTimer) clearTimeout(reconnectTimer);
+        reconnectAttempts = 0;
         if (ws) ws.close();
         currentUser = null;
         selectedPeer = null;
