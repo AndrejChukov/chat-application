@@ -24,6 +24,13 @@ dependencies {
 
     implementation("org.flywaydb:flyway-core:9.22.3")
     implementation("org.postgresql:postgresql:42.7.3")
+
+    testImplementation("org.junit.jupiter:junit-jupiter:5.10.2")
+    testImplementation("io.vertx:vertx-junit5:4.5.7")
+    testImplementation("org.mockito:mockito-junit-jupiter:5.11.0")
+    testImplementation("io.vertx:vertx-web-client:4.5.7")
+    testImplementation("org.testcontainers:junit-jupiter:1.19.7")
+    testImplementation("org.testcontainers:postgresql:1.19.7")
 }
 
 java {
