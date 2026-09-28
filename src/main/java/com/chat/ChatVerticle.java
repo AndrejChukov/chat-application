@@ -80,15 +80,14 @@ public class ChatVerticle extends AbstractVerticle {
 
     private void handleGetUsers(RoutingContext ctx) {
         String username = ctx.request().getParam("username");
-        repository.findUserByUsername(username)
-                .compose(currentUser -> repository.findAllUsersExcept(currentUser.id()))
-                .map(users -> {
-                    JsonArray array = new JsonArray();
-                    users.forEach(u -> array.add(u.toJsonWithOnline(connectionManager.isOnline(u.username()))));
-                    return array;
-                })
+        if (username == null || username.isBlank()) {
+            ctx.response().setStatusCode(400).end("username param required");
+            return;
+        }
+
+        chatService.getUsers(username)
                 .onSuccess(array -> ctx.response().putHeader("Content-Type", "application/json").end(array.encode()))
-                .onFailure(err -> ctx.response().setStatusCode(500).end(err.getMessage()));
+                .onFailure(err -> ctx.response().setStatusCode(404).end(err.getMessage()));
     }
 
     private void handleGetMessages(RoutingContext ctx) {

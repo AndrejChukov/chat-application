@@ -75,15 +75,27 @@ public class ChatRepository {
                 });
     }
 
-    public Future<Message> saveMessage(long senderId, long recipientId, String content) {
+    public Future<Message> saveMessage(User sender, User recipient, String content) {
         return pool.preparedQuery(
                         """
                         INSERT INTO messages (sender_id, recipient_id, content, status)
                         VALUES ($1, $2, $3, $4)
-                        RETURNING id, sender_id, recipient_id, content, status, created_at
+                        RETURNING id, status, created_at
                         """)
-                .execute(Tuple.of(senderId, recipientId, content, MessageStatus.SENT.name()))
-                .compose(rows -> enrichMessage(mapMessageRow(rows.iterator().next())));
+                .execute(Tuple.of(sender.id(), recipient.id(), content, MessageStatus.SENT.name()))
+                .map(rows -> {
+                    Row row = rows.iterator().next();
+                    return new Message(
+                            row.getLong("id"),
+                            sender.id(),
+                            sender.username(),
+                            recipient.id(),
+                            recipient.username(),
+                            content,
+                            MessageStatus.fromString(row.getString("status")),
+                            row.getOffsetDateTime("created_at").toInstant()
+                    );
+                });
     }
 
     public Future<List<Message>> getConversation(long userId, long peerId, int limit, int offset) {
@@ -142,27 +154,6 @@ public class ChatRepository {
 
     public void close() {
         pool.close();
-    }
-
-    private Future<Message> enrichMessage(Message message) {
-        return Future.all(
-                        findUsernameById(message.senderId()),
-                        findUsernameById(message.recipientId()))
-                .map(cf -> new Message(
-                        message.id(),
-                        message.senderId(),
-                        cf.resultAt(0),
-                        message.recipientId(),
-                        cf.resultAt(1),
-                        message.content(),
-                        message.status(),
-                        message.createdAt()));
-    }
-
-    private Future<String> findUsernameById(long userId) {
-        return pool.preparedQuery("SELECT username FROM users WHERE id = $1")
-                .execute(Tuple.of(userId))
-                .map(rows -> rows.iterator().next().getString("username"));
     }
 
     private User mapUser(Row row) {

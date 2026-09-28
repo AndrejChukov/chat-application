@@ -7,6 +7,7 @@ import com.chat.model.WsEvent;
 import com.chat.model.WsEventType;
 import io.vertx.core.Future;
 import io.vertx.core.http.ServerWebSocket;
+import io.vertx.core.json.JsonArray;
 import io.vertx.core.json.JsonObject;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -71,18 +72,16 @@ public class ChatService {
 
         return repository.findUserByUsername(senderUsername)
                 .compose(sender -> repository.findUserByUsername(recipientUsername)
-                        .compose(recipient -> repository.saveMessage(sender.id(), recipient.id(), content.trim())
+                        .compose(recipient -> repository.saveMessage(sender, recipient, content.trim())
                                 .map(message -> new Object[]{sender, recipient, message})))
                 .compose(result -> {
                     Message message = (Message) result[2];
 
-                    // 1. Уведомляем отправителя
                     JsonObject messagePayload = new JsonObject().put("message", message.toJson());
                     sendEvent(senderWs, WsEventType.MESSAGE_SENT, messagePayload);
 
                     ServerWebSocket recipientWs = connectionManager.get(recipientUsername);
 
-                    // 2. Если получатель в сети — пишем в сокет
                     if (recipientWs != null && !recipientWs.isClosed()) {
                         String rawEvent = WsEvent.of(WsEventType.NEW_MESSAGE.getValue(), messagePayload).toJson().encode();
 
@@ -109,6 +108,25 @@ public class ChatService {
                     sendError(senderWs, err.getMessage());
                 })
                 .mapEmpty();
+    }
+
+    public Future<JsonArray> getUsers(String currentUsername) {
+        try {
+            validateUsername(currentUsername);
+        } catch (IllegalArgumentException e) {
+            return Future.failedFuture(e);
+        }
+
+        return repository.findUserByUsername(currentUsername)
+                .compose(currentUser -> repository.findAllUsersExcept(currentUser.id()))
+                .map(users -> {
+                    JsonArray array = new JsonArray();
+                    for (User user : users) {
+                        boolean online = connectionManager.isOnline(user.username());
+                        array.add(user.toJsonWithOnline(online));
+                    }
+                    return array;
+                });
     }
 
     public Future<Void> markAsRead(String readerUsername, String peerUsername, ServerWebSocket readerWs) {
