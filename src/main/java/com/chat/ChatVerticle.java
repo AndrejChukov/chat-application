@@ -30,6 +30,8 @@ public class ChatVerticle extends AbstractVerticle {
         repository = new ChatRepository(vertx);
         connectionManager = new ConnectionManager();
 
+        connectionManager.startHeartbeat(vertx, 30_000);
+
         Router router = Router.router(vertx);
         router.route().handler(BodyHandler.create());
 
@@ -75,6 +77,9 @@ public class ChatVerticle extends AbstractVerticle {
 
     @Override
     public void stop() {
+        if (connectionManager != null) {
+            connectionManager.stopHeartbeat(vertx);
+        }
         if (server != null) {
             server.close();
         }
