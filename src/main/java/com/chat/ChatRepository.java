@@ -185,6 +185,8 @@ public class ChatRepository {
     }
 
     private static String getEnv(String key, String defaultValue) {
+        String prop = System.getProperty(key);
+        if (prop != null && !prop.isBlank()) return prop;
         String value = System.getenv(key);
         return value != null && !value.isBlank() ? value : defaultValue;
     }
