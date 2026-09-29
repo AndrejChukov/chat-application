@@ -320,9 +320,13 @@
                     }
                     break;
                 case 'status_update':
-                    const msg = findMessageById(data.messageId);
-                    if (msg) msg.status = data.status;
-                    updateMessageStatus(data.messageId, data.status);
+                    const ids = data.messageIds ? data.messageIds : [data.messageId];
+                    ids.forEach(id => {
+                        if (!id) return;
+                        const msg = findMessageById(id);
+                        if (msg) msg.status = data.status;
+                        updateMessageStatus(id, data.status);
+                    });
                     break;
                 case 'user_online':
                     updateUserOnlineStatus(data.username, true);

@@ -72,42 +72,40 @@ public class ChatService {
 
         return repository.findUserByUsername(senderUsername)
                 .compose(sender -> repository.findUserByUsername(recipientUsername)
-                        .compose(recipient -> repository.saveMessage(sender, recipient, content.trim())
-                                .map(message -> new Object[]{sender, recipient, message})))
-                .compose(result -> {
-                    Message message = (Message) result[2];
-
+                        .compose(recipient -> repository.saveMessage(sender, recipient, content.trim())))
+                .compose(message -> {
                     JsonObject messagePayload = new JsonObject().put("message", message.toJson());
                     sendEvent(senderWs, WsEventType.MESSAGE_SENT, messagePayload);
 
-                    ServerWebSocket recipientWs = connectionManager.get(recipientUsername);
-
-                    if (recipientWs != null && !recipientWs.isClosed()) {
-                        String rawEvent = WsEvent.of(WsEventType.NEW_MESSAGE.getValue(), messagePayload).toJson().encode();
-
-                        return recipientWs.writeTextMessage(rawEvent)
-                                .compose(v -> repository.transitionMessageStatus(message.id(), MessageStatus.SENT, MessageStatus.DELIVERED))
-                                .onSuccess(updated -> {
-                                    if (Boolean.TRUE.equals(updated)) {
-                                        JsonObject statusPayload = new JsonObject()
-                                                .put("messageId", message.id())
-                                                .put("status", MessageStatus.DELIVERED.name());
-
-                                        sendEvent(senderWs, WsEventType.STATUS_UPDATE, statusPayload);
-                                        sendEvent(recipientWs, WsEventType.STATUS_UPDATE, statusPayload);
-                                    }
-                                })
-                                .onFailure(err -> log.warn("Failed to write to WS for {}. Message remains SENT.", recipientUsername, err))
-                                .mapEmpty();
-                    }
-
-                    return Future.succeededFuture();
+                    deliverToRecipientAsync(recipientUsername, message, senderWs, messagePayload);
+                    return Future.<Void>succeededFuture();
                 })
                 .onFailure(err -> {
-                    log.error("Failed to process message from {} to {}", senderUsername, recipientUsername, err);
-                    sendError(senderWs, err.getMessage());
+                    log.error("Failed to persist message from {} to {}", senderUsername, recipientUsername, err);
+                    sendError(senderWs, "Не удалось отправить сообщение: " + err.getMessage());
+                });
+    }
+
+    private void deliverToRecipientAsync(String recipientUsername, Message message, ServerWebSocket senderWs, JsonObject payload) {
+        ServerWebSocket recipientWs = connectionManager.get(recipientUsername);
+        if (recipientWs == null || recipientWs.isClosed()) {
+            return;
+        }
+
+        String rawEvent = WsEvent.of(WsEventType.NEW_MESSAGE.getValue(), payload).toJson().encode();
+
+        recipientWs.writeTextMessage(rawEvent)
+                .compose(v -> repository.transitionMessageStatus(message.id(), MessageStatus.SENT, MessageStatus.DELIVERED))
+                .onSuccess(updated -> {
+                    if (Boolean.TRUE.equals(updated)) {
+                        JsonObject statusPayload = new JsonObject()
+                                .put("messageId", message.id())
+                                .put("status", MessageStatus.DELIVERED.name());
+                        sendEvent(senderWs, WsEventType.STATUS_UPDATE, statusPayload);
+                        sendEvent(recipientWs, WsEventType.STATUS_UPDATE, statusPayload);
+                    }
                 })
-                .mapEmpty();
+                .onFailure(err -> log.warn("Recipient {} was online but payload delivery failed: {}", recipientUsername, err.getMessage()));
     }
 
     public Future<JsonArray> getUsers(String currentUsername) {
@@ -139,15 +137,18 @@ public class ChatService {
                     @SuppressWarnings("unchecked")
                     List<Long> messageIds = (List<Long>) result[1];
 
+                    if (messageIds.isEmpty()) return;
+
                     ServerWebSocket peerWs = connectionManager.get(peer.username());
-                    for (Long messageId : messageIds) {
-                        JsonObject statusPayload = new JsonObject()
-                                .put("messageId", messageId)
-                                .put("status", MessageStatus.READ.name());
-                        sendEvent(readerWs, WsEventType.STATUS_UPDATE, statusPayload);
-                        if (peerWs != null && !peerWs.isClosed()) {
-                            sendEvent(peerWs, WsEventType.STATUS_UPDATE, statusPayload);
-                        }
+
+                    JsonArray idsArray = new JsonArray(messageIds);
+                    JsonObject statusPayload = new JsonObject()
+                            .put("messageIds", idsArray)
+                            .put("status", MessageStatus.READ.name());
+
+                    sendEvent(readerWs, WsEventType.STATUS_UPDATE, statusPayload);
+                    if (peerWs != null && !peerWs.isClosed()) {
+                        sendEvent(peerWs, WsEventType.STATUS_UPDATE, statusPayload);
                     }
                 })
                 .onFailure(err -> sendError(readerWs, err.getMessage()))

@@ -80,7 +80,6 @@ public class ConnectionManager {
                 if (!session.responsive().getAndSet(false)) {
                     log.warn("Heartbeat timeout for user: {}. Closing zombie socket.", username);
                     ws.close((short) 1001, "Heartbeat timeout");
-                    unregister(username, ws);
                 } else {
                     ws.writePing(Buffer.buffer("ping"));
                 }

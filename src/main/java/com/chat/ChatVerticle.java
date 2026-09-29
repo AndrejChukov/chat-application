@@ -2,6 +2,8 @@ package com.chat;
 
 import com.chat.model.WsEventType;
 import io.vertx.core.AbstractVerticle;
+import io.vertx.core.Future;
+import io.vertx.core.Promise;
 import io.vertx.core.http.HttpServer;
 import io.vertx.core.http.ServerWebSocket;
 import io.vertx.core.json.JsonArray;
@@ -74,10 +76,20 @@ public class ChatVerticle extends AbstractVerticle {
     }
 
     @Override
-    public void stop() {
-        if (connectionManager != null) connectionManager.stopHeartbeat(vertx);
-        if (server != null) server.close();
-        if (repository != null) repository.close();
+    public void stop(Promise<Void> stopPromise) {
+        if (connectionManager != null) {
+            connectionManager.stopHeartbeat(vertx);
+        }
+
+        Future<Void> serverClose = (server != null) ? server.close() : Future.succeededFuture();
+        Future<Void> repoClose = (repository != null) ? repository.close() : Future.succeededFuture();
+
+        Future.all(serverClose, repoClose)
+                .onSuccess(v -> {
+                    log.info("ChatVerticle stopped gracefully");
+                    stopPromise.complete();
+                })
+                .onFailure(stopPromise::fail);
     }
 
     private void handleLogin(RoutingContext ctx) {
@@ -155,7 +167,8 @@ public class ChatVerticle extends AbstractVerticle {
         });
 
         ws.closeHandler(v -> {
-            if (connectionManager.unregister(username, ws) && !connectionManager.isOnline(username)) {
+            boolean wasRemoved = connectionManager.unregister(username, ws);
+            if (wasRemoved && !connectionManager.isOnline(username)) {
                 chatService.broadcastStatus(username, WsEventType.USER_OFFLINE);
             }
         });

@@ -149,8 +149,8 @@ public class ChatRepository {
                 });
     }
 
-    public void close() {
-        pool.close();
+    public Future<Void> close() {
+        return pool.close();
     }
 
     private User mapUser(Row row) {
