@@ -37,18 +37,15 @@ public class ChatRepository {
     }
 
     public Future<User> findOrCreateUser(String username) {
-        return pool.preparedQuery("SELECT id, username FROM users WHERE username = $1")
+        return pool.preparedQuery(
+                        """
+                        INSERT INTO users (username) VALUES ($1)
+                        ON CONFLICT (username) DO UPDATE 
+                        SET username = EXCLUDED.username 
+                        RETURNING id, username
+                        """)
                 .execute(Tuple.of(username))
-                .compose(rows -> {
-                    if (rows.iterator().hasNext()) {
-                        Row row = rows.iterator().next();
-                        return Future.succeededFuture(mapUser(row));
-                    }
-                    return pool.preparedQuery(
-                                    "INSERT INTO users (username) VALUES ($1) RETURNING id, username")
-                            .execute(Tuple.of(username))
-                            .map(insertRows -> mapUser(insertRows.iterator().next()));
-                })
+                .map(rows -> mapUser(rows.iterator().next()))
                 .onFailure(err -> log.error("Failed to find or create user: {}", username, err));
     }
 
