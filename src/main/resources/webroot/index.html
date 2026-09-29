@@ -311,8 +311,13 @@
                 case 'connected':
                     break;
                 case 'message_sent':
+                    appendMessage(data.message);
+                    break;
                 case 'new_message':
                     appendMessage(data.message);
+                    if (selectedPeer === data.message.senderUsername && ws && ws.readyState === WebSocket.OPEN) {
+                        ws.send(JSON.stringify({ type: 'mark_read', peerUsername: selectedPeer }));
+                    }
                     break;
                 case 'status_update':
                     const msg = findMessageById(data.messageId);
@@ -399,6 +404,12 @@
 
     const saved = localStorage.getItem('chat_username');
     if (saved) usernameInput.value = saved;
+
+    window.addEventListener('focus', () => {
+        if (selectedPeer && ws && ws.readyState === WebSocket.OPEN) {
+            ws.send(JSON.stringify({ type: 'mark_read', peerUsername: selectedPeer }));
+        }
+    });
 </script>
 </body>
 </html>
